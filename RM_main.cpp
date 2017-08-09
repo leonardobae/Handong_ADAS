@@ -32,6 +32,8 @@ int main()
 	bool stop = false;
 	char key;
 
+	RMclass.SetQueryData();
+
 	while (1)
 	{
 		if (!stop)
@@ -48,6 +50,7 @@ int main()
 
 			RMclass.MyFeatureDetector();
 			RMclass.DescriptorMatching();
+			RMclass.VectorClear();
 
 		}
 

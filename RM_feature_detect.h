@@ -22,21 +22,21 @@ using namespace cv;
 class RM
 {
 private:
-	vector<Mat> candidateBoxes;
-	vector<Mat> selectedBoxes;
+	vector<Mat> candidateBoxes;					//Contains candidate boundedRect Mats that contains roadmark.
+	vector<Mat> selectedBoxes;					//
 	int candidateBox_cnt = 0;
 	bool window_open_flag = false;
 	int no_candidate_cnt = 0;
 	int selectedBox_cnt = 0;
 
 	//DB
-	vector<Mat> descriptorVector;
+	vector<Mat> DBdescriptorVector;
 	vector<Mat> DBImgVector;
 	vector<vector<KeyPoint>> DBKeypointVector;
 
 	//QUERY 
 	vector<Mat> candidateDescriptorVector;
-	vector<vector<KeyPoint>> candidadeteKeypointVector;
+	vector<vector<KeyPoint>> candidateKeypointVector;
 	vector<KeyPoint> keypoints;
 	vector<Vec4i> hierarchy;
 
@@ -54,6 +54,7 @@ public:
 	void SetQueryData();
 	int DescriptorMatching();
 	void ShowImage(String windowName, Mat frame);
+	int VectorClear();
 
 	Mat c_frame; //current frame
 	Mat t_frame;
@@ -64,6 +65,7 @@ public:
 	Mat warpImg;
 	vector<vector<Point>> contours; // даеУ╬Н 
 	vector<Point> approxCurve;
+	bool window_open_flag2 = false;
 	
 
 };

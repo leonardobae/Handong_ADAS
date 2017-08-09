@@ -154,12 +154,13 @@ void RM::Cont(Mat& img)
 	imgThresh(img);
 
 	imshow("Thresh", t_frame);
-  
-	findContours(t_frame, contours, hierarchy, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE, Point(0, 0));
 
+	Mat temp = Mat::zeros(t_frame.rows + 40, t_frame.cols + 40, CV_8UC1);
+	t_frame.copyTo(temp(cv::Rect(20, 20, t_frame.cols, t_frame.rows)));
+	imshow("temp", temp);
+ 
+	findContours(temp, contours, hierarchy, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE, Point(0, 0));
 	cout << "contour size : " << contours.size() << endl;
-
-	Mat c_box; //candidate boxes(컨투어 된 후보박스)
 
 	vector<Rect> boundRect(contours.size());
 
@@ -172,47 +173,55 @@ void RM::Cont(Mat& img)
 		if (boundRect[i].height > boundRect[i].width && boundRect[i].height < 4 * boundRect[i].width && boundRect[i].height > 100 && boundRect[i].width < 160)
 		{ // RoadMark Candidate condition - 임의로 설정한 값임.
 
-			drawContours(t_frame, vector<vector<Point>>(1, approxCurve), 0, Scalar(255, 255, 255), CV_FILLED);
-			/*
+			//Mat temp = Mat::zeros(boundRect[i].height + 20, boundRect[i].width + 20, CV_8UC1);
+			//Mat temp = Mat::zeros(t_frame.cols + 300, t_frame.rows + 300, CV_8UC1);
+			Mat c_box;
+
+			drawContours(temp, vector<vector<Point>>(1, approxCurve), 0, Scalar(255, 255, 255), CV_FILLED);
+
 			boundRect[i].height += 10;
 			boundRect[i].width += 10;
 			boundRect[i] -= pt;
-			*/
-			rectangle(t_frame, boundRect[i].tl(), boundRect[i].br(), Scalar(255, 255, 255), 2);
-			c_box = t_frame(boundRect[i]);
+			//rectangle(t_frame, boundRect[i].tl(), boundRect[i].br(), Scalar(255, 255, 255), 2);
+			
+			c_box = temp(boundRect[i]);
 			resize(c_box, c_box, Size(c_box.cols / 2, c_box.rows / 2));
 			candidateBoxes.push_back(c_box);
 	
 		}
 		rectangle(t_frame, boundRect[i].tl(), boundRect[i].br(), Scalar(255, 255, 255), 2);
 		
-
-
 	}
 	cout << "candidateBoxes.size() = " << candidateBoxes.size() << endl;
-	imshow("Contours", t_frame);
+	imshow("Contours", temp);
 
 }
 
 void RM::MyFeatureDetector()
 {
+	//if (!candidateKeypointVector.empty())			//candiateKeyPointVector 초기화
+	//	candidateKeypointVector.clear();
+
 	Mat candidateDescriptors;
 
-	//cout << "keypoints.size() " << keypoints.size() << endl;
+	cout << "keypoints.size() " << keypoints.size() << endl;
 
 	// candidate box 의 특징점 검출 
 	for (int i = 0; i < candidateBoxes.size(); i++)
 	{
 		//검출기 생성 
-		Mat dstImage(candidateBoxes[i].size(), CV_8UC1);
-		cvtColor(candidateBoxes[i], dstImage, CV_BGR2GRAY);
+		Mat dstImage = Mat::zeros(candidateBoxes[i].size(), CV_8UC1);
+		candidateBoxes[i].copyTo(dstImage);											// <- 두줄 필요??
+
+		//이미 candidateBoxes에 있는 애들이 gray(binary), threshold된 이미지들임.
+		//cvtColor(candidateBoxes[i], dstImage, CV_BGR2GRAY);
 
 
 		//////------------------------GFTTDetector---------------------------//////
 		GFTTDetector goodF(maxCorners, qualityLevel, minDistance, blockSize, true);
 		goodF.detect(dstImage, keypoints);
 		cout << "1. keypoints.size() = " << keypoints.size() << endl;
-		candidadeteKeypointVector.push_back(keypoints);
+		candidateKeypointVector.push_back(keypoints);
 
 		//KeyPointsFilter::removeDuplicated(keypoints);
 		//KeyPointsFilter::retainBest(keypoints, 10);
@@ -277,11 +286,10 @@ void RM::MyFeatureDetector()
 		ShowImage("dstImage", dstImage);
 
 		window_open_flag = true;
-		no_candidate_cnt = 0; //initialize
-		candidateBoxes.pop_back();
+		no_candidate_cnt = 0;			 //initialize     <- 필요??
+		//candidateBoxes.pop_back();      //   <- ????
 
 	}
-
 
 	cout << "no_candidate_cnt = " << no_candidate_cnt << endl;
 	if (candidateBoxes.size() == 0)
@@ -291,6 +299,7 @@ void RM::MyFeatureDetector()
 
 	if (window_open_flag == true && no_candidate_cnt > 10){ // //window가 열려있을 때 10frame 이상 candidate 못찾으면 창 닫음
 		window_open_flag = false;
+		//candidateDescriptorVector.clear();
 		destroyWindow("dstImage");
 	}
 
@@ -382,7 +391,7 @@ void RM::SetQueryData()  //쿼리 데이타 구축
 
 		}
 
-		descriptorVector.push_back(descriptors);
+		DBdescriptorVector.push_back(descriptors);
 		DBKeypointVector.push_back(queryKeypoints);
 		DBImgVector.push_back(queryImg);
 		ShowImage("queryImg" + to_string(i + 1), queryImg);
@@ -408,14 +417,16 @@ int RM::DescriptorMatching()
 	//1. NORM_MAMMING 매칭 거리로 사용한 Brute Force 매칭 결과 사용.
 	for (int j = 0; j < candidateDescriptorVector.size(); j++)
 	{
+		cout << candidateDescriptorVector.size() << endl;
 		int maxMatch_cnt = 0;
 		int maxMatch_idx = 0;
-		for (int i = 0; i < descriptorVector.size(); i++) //query
+		for (int i = 0; i < DBdescriptorVector.size(); i++) //query
 		{
+			cout << DBdescriptorVector.size() << endl;
 			//Matching descriptor vectors
 			vector <DMatch> matches;
 			BFMatcher matcher(NORM_HAMMING);
-			matcher.match(descriptorVector[i], candidateDescriptorVector[j], matches);
+			matcher.match(DBdescriptorVector[i], candidateDescriptorVector[j], matches);
 
 			//Ptr<DescriptorMatcher> matcher;
 			//matcher = DescriptorMatcher::create("BruteForce-Hamming");
@@ -443,11 +454,17 @@ int RM::DescriptorMatching()
 
 
 			vector<DMatch> goodMatches;
+			//int goodMatchesNumber = 0;
+
 			double fTh = 4 * minDist;
 			for (int k = 0; k < matches.size(); k++)
 			{
 				if (matches[k].distance <= max(fTh, 0.02))
+				{
 					goodMatches.push_back(matches[k]);
+					//goodMatchesNumber++;
+				}
+
 			}
 
 			cout << "goodMatches.size()" << goodMatches.size() << endl;
@@ -478,12 +495,35 @@ int RM::DescriptorMatching()
 			*/
 
 		}
-		cout << maxMatch_idx << "th query is best matchig" << endl;
+		cout << maxMatch_idx << "th query is best matching" << endl;
 		//Draw good_matches;
 		Mat imgMatches;
-		drawMatches(DBImgVector[maxMatch_idx], DBKeypointVector[maxMatch_idx], selectedBoxes[j], candidadeteKeypointVector[j], finalMatches, imgMatches,
+		drawMatches(DBImgVector[maxMatch_idx], DBKeypointVector[maxMatch_idx], selectedBoxes[j], candidateKeypointVector[j], finalMatches, imgMatches,
 			Scalar::all(-1), Scalar::all(-1), vector<char>(), DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS); //DEFAULT
 		ShowImage("goodMatches", imgMatches);
 	}
+
+	//candidateKeypointVector.clear();
+	//candidateDescriptorVector.clear();
+
+	return 0;
+}
+
+int RM::VectorClear()
+{
+
+	cout << "vector clear: no_candidate_cnt  " << no_candidate_cnt << endl;
+	if (window_open_flag2 == true && no_candidate_cnt > 10)
+	{
+
+		selectedBoxes.clear();
+		candidateKeypointVector.clear();
+		candidateDescriptorVector.clear();
+		cout << selectedBoxes.size() << " & " << candidateKeypointVector.size() << " & " << candidateDescriptorVector.size() << endl;
+		window_open_flag2 = false;
+		destroyWindow("goodMatches");
+		return 1;
+	}
+
 	return 0;
 }
