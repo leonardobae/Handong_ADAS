@@ -43,7 +43,7 @@ void RM::subRoiBinary(Mat& img)
 
 void RM::widthBinary(Mat& markRoiBinary)
 {
-	float tau = 10;
+	double tau = 10;
 	Mat srcGray = roi.clone();//=subRoiBinary.clone();
 	//cvtColor(roi, srcGray, CV_BGR2GRAY);
 	Mat dstGray(srcGray.rows, srcGray.cols, srcGray.type());
@@ -59,7 +59,7 @@ void RM::widthBinary(Mat& markRoiBinary)
 			tau = 0;
 		if (j == srcGray.rows - 1)
 			tau = tau;
-		for (int i = tau; i < srcGray.cols - tau; ++i)
+		for (int i = tau; i < (int)srcGray.cols - tau; ++i)
 		{
 			if (ptRowSrc[i] != 0)
 			{
@@ -106,7 +106,7 @@ void RM::imgThresh(Mat& img)
 	output.copyTo(t_frame);
 }
 
-void RM::WarpImage(Mat& ROI_src)
+Mat RM::WarpImage(Mat& ROI_src)
 {
 	vector<Point2f> corners(4);
 	corners[0] = Point2f(140, 40);
@@ -118,9 +118,9 @@ void RM::WarpImage(Mat& ROI_src)
 
 	//Warping 후의 좌표
 	vector<Point2f> warpCorners(4);
-	warpCorners[0] = Point2f(0, 0);
-	warpCorners[1] = Point2f(warpImg.cols, 0);
-	warpCorners[2] = Point2f(0, warpImg.rows);
+	warpCorners[0] = Point2f(0.0f, 0.0f);
+	warpCorners[1] = Point2f(warpImg.cols, 0.0f);
+	warpCorners[2] = Point2f(0.0f, warpImg.rows);
 	warpCorners[3] = Point2f(warpImg.cols, warpImg.rows);
 
 	//Transformation Matrix 구하기
@@ -129,20 +129,20 @@ void RM::WarpImage(Mat& ROI_src)
 	//Warping
 	warpPerspective(ROI_src, warpImg, trans, warpSize);
 
-	Cont(warpImg);
+	//Cont(warpImg);
 
 	for (int i = 0; i<corners.size(); i++)
 		circle(c_frame(Rect(480, 450, 380, 200)), corners[i], 3, Scalar(0, 255, 0), 3);
 
 	imshow("X, Y Points", c_frame(Rect(480, 450, 380, 200)));
 
-
+	return warpImg;
 }
 
 
 //Input Param: Color Img
 //Output: 
-void RM::Cont(Mat& img)
+int RM::Cont(Mat& img)
 {
 	RNG rng(12345);
 	Mat output;
@@ -177,7 +177,10 @@ void RM::Cont(Mat& img)
 			//Mat temp = Mat::zeros(t_frame.cols + 300, t_frame.rows + 300, CV_8UC1);
 			Mat c_box;
 
-			drawContours(temp, vector<vector<Point>>(1, approxCurve), 0, Scalar(255, 255, 255), CV_FILLED);
+
+			drawContours(temp, vector<vector<Point>>(1, approxCurve), 0, Scalar(255), CV_FILLED);
+			//drawContours(temp, vector<vector<Point>>(1, approxCurve), 0, Scalar(255), 2, 8, hierarchy, 0, Point());
+			
 
 			boundRect[i].height += 10;
 			boundRect[i].width += 10;
@@ -192,9 +195,29 @@ void RM::Cont(Mat& img)
 		rectangle(t_frame, boundRect[i].tl(), boundRect[i].br(), Scalar(255, 255, 255), 2);
 		
 	}
-	cout << "candidateBoxes.size() = " << candidateBoxes.size() << endl;
-	imshow("Contours", temp);
 
+
+	cout << "candidateBoxes.size() = " << candidateBoxes.size() << endl;
+	cout << "no_candidate_cnt = " << no_candidate_cnt << endl;
+	
+	if (candidateBoxes.size() > 0)
+	{
+		no_candidate_cnt = 0; //initialize
+	}
+	else
+	{
+		no_candidate_cnt++;
+	}
+	if (window_open_flag == true && no_candidate_cnt > 10){ // //window가 열려있을 때 10frame 이상 candidate 못찾으면 창 닫음
+		window_open_flag = false;
+		candidateBoxes.clear();
+		destroyWindow("dstImage");
+	}
+
+
+
+	imshow("Contours", temp);
+	return candidateBoxes.size();
 }
 
 void RM::MyFeatureDetector()
@@ -207,11 +230,11 @@ void RM::MyFeatureDetector()
 	cout << "keypoints.size() " << keypoints.size() << endl;
 
 	// candidate box 의 특징점 검출 
-	for (int i = 0; i < candidateBoxes.size(); i++)
+	for (int i = 0; i < candidateBoxes.size(); ) //***** i++하지 않음. 벡터의 맨 앞을 계속 가리킴. (vector size는 자동으로 줄어듬.)
 	{
 		//검출기 생성 
 		Mat dstImage = Mat::zeros(candidateBoxes[i].size(), CV_8UC1);
-		candidateBoxes[i].copyTo(dstImage);											// <- 두줄 필요??
+		candidateBoxes[i].copyTo(dstImage);			
 
 		//이미 candidateBoxes에 있는 애들이 gray(binary), threshold된 이미지들임.
 		//cvtColor(candidateBoxes[i], dstImage, CV_BGR2GRAY);
@@ -286,40 +309,38 @@ void RM::MyFeatureDetector()
 		ShowImage("dstImage", dstImage);
 
 		window_open_flag = true;
-		no_candidate_cnt = 0;			 //initialize     <- 필요??
-		//candidateBoxes.pop_back();      //   <- ????
+		//no_candidate_cnt = 0;			 //initialize     <- 필요??
+		candidateBoxes.erase(candidateBoxes.begin() + i);  //***** 맨 앞에 있는 벡터 지우기 
 
 	}
-
-	cout << "no_candidate_cnt = " << no_candidate_cnt << endl;
-	if (candidateBoxes.size() == 0)
-	{
-		no_candidate_cnt++;
-	}
-
-	if (window_open_flag == true && no_candidate_cnt > 10){ // //window가 열려있을 때 10frame 이상 candidate 못찾으면 창 닫음
-		window_open_flag = false;
-		//candidateDescriptorVector.clear();
-		destroyWindow("dstImage");
-	}
-
 	return;
 }
 
 
-void RM::SetQueryData()  //쿼리 데이타 구축 
+void RM::SetDB()  // DB 만들기 
 {
+	
 
 	for (int i = 0; i < querySize; i++)
 	{
+	
+		vector<Point> approxCurve;
 		Mat queryImg = imread("RoadMark" + to_string(i + 1) + ".png", CV_8UC1);
+		
 
 		//Query Contour
 		vector<vector<Point>> queryContours;
 		findContours(queryImg, queryContours, noArray(), RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
-		cout << "queryContour.size() = " << queryContours.size() << endl;
-		drawContours(queryImg, queryContours, -1, Scalar(255), 2, 8, hierarchy, 0, Point());
 
+		cout << "queryContour.size() = " << queryContours.size() << endl;
+
+		for (int j = 0; j < queryContours.size(); j++)
+		{
+			approxPolyDP(Mat(queryContours[j]), approxCurve, arcLength(Mat(queryContours[j]), true)*0.01, true); //*****approxPolyDP 추가
+			drawContours(queryImg, vector<vector<Point>>(1,approxCurve), -1, Scalar(255), 2, 8, hierarchy, 0, Point());
+		}
+		
+		
 		//cvtColor(queryImg, queryImg, CV_BGR2GRAY);
 		resize(queryImg, queryImg, Size(120, 180)); //실험적으로 설정한 값 
 
@@ -335,14 +356,19 @@ void RM::SetQueryData()  //쿼리 데이타 구축
 		//////-----------------------GFTTDetector-------------------//////
 		GFTTDetector queryGoodF(maxCorners, qualityLevel, minDistance, blockSize, true);
 		queryGoodF.detect(queryImg, queryKeypoints);
-		cout << "1. queryKeypoints.size()" << queryKeypoints.size() << endl;
+		cout << "1. queryKeypoints.size() = " << queryKeypoints.size() << endl;
 
 		KeyPointsFilter::removeDuplicated(queryKeypoints);
 		//KeyPointsFilter::retainBest(queryKeypoints, 20);
 
+
+		//////------------------------------------------------------//////
 		ORB orbF(100, 1.2f, 8, edgeThreshold, 0, 2, ORB::HARRIS_SCORE, patchSize);
 		orbF.compute(queryImg, queryKeypoints, descriptors);
 		cout << "2. queryKeypoints.size() = " << queryKeypoints.size() << endl;
+		//////------------------------------------------------------//////
+		
+
 
 		//BRISK queryBriskF;
 		//queryBriskF.compute(queryImg, queryKeypoints, descriptors);
@@ -418,15 +444,20 @@ int RM::DescriptorMatching()
 	for (int j = 0; j < candidateDescriptorVector.size(); j++)
 	{
 		cout << candidateDescriptorVector.size() << endl;
-		int maxMatch_cnt = 0;
+			int maxMatch_cnt = 0;
 		int maxMatch_idx = 0;
 		for (int i = 0; i < DBdescriptorVector.size(); i++) //query
 		{
 			cout << DBdescriptorVector.size() << endl;
 			//Matching descriptor vectors
-			vector <DMatch> matches;
+			int k1 = 2;
+			vector<DMatch> matches;
 			BFMatcher matcher(NORM_HAMMING);
 			matcher.match(DBdescriptorVector[i], candidateDescriptorVector[j], matches);
+
+			//vector <vector<DMatch> >matches;
+			//matcher.knnMatch(DBdescriptorVector[i], candidateDescriptorVector[j], matches,k1);
+
 
 			//Ptr<DescriptorMatcher> matcher;
 			//matcher = DescriptorMatcher::create("BruteForce-Hamming");
@@ -451,26 +482,42 @@ int RM::DescriptorMatching()
 			}
 			cout << "minDist =" << (double)minDist << endl;
 			cout << "maxDist =" << (double)maxDist << endl;
-
+			
 
 			vector<DMatch> goodMatches;
 			//int goodMatchesNumber = 0;
-
+			
 			double fTh = 4 * minDist;
+			cout << "fTh = " << fTh << endl;
 			for (int k = 0; k < matches.size(); k++)
 			{
-				if (matches[k].distance <= max(fTh, 0.02))
+				if (matches[k].distance <= max(fTh, 0.02)) // 왜 0.02 인가...
 				{
 					goodMatches.push_back(matches[k]);
 					//goodMatchesNumber++;
 				}
 
 			}
-
+			
+			/* 
+			//실패
+			//nndaRatio - find good matches;
+			double nndrRatio = 0.6f;
+			for (int k = 0; k < matches.size(); k++)
+			{
+				//cout << "matches[k].size() = " << matches[k].size() << endl;
+				if (matches.at(k).size() == 2 && matches.at(k).at(0).distance <= nndrRatio *matches.at(k).at(1).distance);
+				{
+					goodMatches.push_back(matches[k][0]);
+				}
+			}
+			*/
+			 
 			cout << "goodMatches.size()" << goodMatches.size() << endl;
 			if (goodMatches.size() < 4){
 				cout << "the number of good Matches is too small" << endl;
-				break;
+				//break;
+				//return -1;
 			}
 
 			//Find the best query image matching the candidate boxes
@@ -495,11 +542,14 @@ int RM::DescriptorMatching()
 			*/
 
 		}
+		cout << "////////////////////////////////////////////" << endl;
 		cout << maxMatch_idx << "th query is best matching" << endl;
 		//Draw good_matches;
 		Mat imgMatches;
 		drawMatches(DBImgVector[maxMatch_idx], DBKeypointVector[maxMatch_idx], selectedBoxes[j], candidateKeypointVector[j], finalMatches, imgMatches,
 			Scalar::all(-1), Scalar::all(-1), vector<char>(), DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS); //DEFAULT
+		window_open_flag2 = true;
+		namedWindow("goodMatches", CV_WINDOW_AUTOSIZE);
 		ShowImage("goodMatches", imgMatches);
 	}
 
@@ -512,14 +562,17 @@ int RM::DescriptorMatching()
 int RM::VectorClear()
 {
 
-	cout << "vector clear: no_candidate_cnt  " << no_candidate_cnt << endl;
-	if (window_open_flag2 == true && no_candidate_cnt > 10)
+	cout << "vector clear" << endl;
+	cout << "no_candidate_cnt = " <<  no_candidate_cnt << endl;
+	if (window_open_flag2 == true && no_candidate_cnt > 10) 
 	{
 
 		selectedBoxes.clear();
 		candidateKeypointVector.clear();
 		candidateDescriptorVector.clear();
-		cout << selectedBoxes.size() << " & " << candidateKeypointVector.size() << " & " << candidateDescriptorVector.size() << endl;
+		cout << "selectedBoxes.size() = " << selectedBoxes.size() << endl 
+			<<"candidateKeypointVector.size() = " << candidateKeypointVector.size() << endl 
+			<<"candidateDescriptorVector.size() = " << candidateDescriptorVector.size() << endl;
 		window_open_flag2 = false;
 		destroyWindow("goodMatches");
 		return 1;

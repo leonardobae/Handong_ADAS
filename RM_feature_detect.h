@@ -6,9 +6,9 @@
 #define num_sub_roi_y 2
 
 //GFTTDetector parameter
-#define maxCorners 30
-#define qualityLevel 0.01
-#define minDistance 5
+#define maxCorners 100
+#define qualityLevel 0.005
+#define minDistance 4
 #define blockSize 2
 #define querySize 4
 
@@ -23,7 +23,7 @@ class RM
 {
 private:
 	vector<Mat> candidateBoxes;					//Contains candidate boundedRect Mats that contains roadmark.
-	vector<Mat> selectedBoxes;					//
+	vector<Mat> selectedBoxes;			//
 	int candidateBox_cnt = 0;
 	bool window_open_flag = false;
 	int no_candidate_cnt = 0;
@@ -45,13 +45,13 @@ public:
 	void subRoiBinary(Mat& img);
 	void widthBinary(Mat& img);
 	void imgThresh(Mat& img);
-	void WarpImage(Mat& img);
+	Mat WarpImage(Mat& img);    //*****main으로 matrix를 반환하도록 변경
 	void HarrisCorner(Mat& img);
-	void Cont(Mat& img);
+	int Cont(Mat& img);			//*****main에서 호출 하고 candidateBoxes.size()를 반환하도록 변경. window_open_flag1,2 관리 
 	void fast_detection(Mat& img);
 	void ChooseCanditates(Mat& roi_binary);
 	void MyFeatureDetector();
-	void SetQueryData();
+	void SetDB();				//******setQueryData 함수 이름만 바꿈!
 	int DescriptorMatching();
 	void ShowImage(String windowName, Mat frame);
 	int VectorClear();
